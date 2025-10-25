@@ -156,6 +156,62 @@ def cv_plot_keypoints(img, coords, confidence, class_ids, bboxes, scores,
           
     return img, pose
 
+# Remove TensorFlow dependency and provide a minimal visualization helper.
+import numpy as np
+import cv2
+
+def cv_plot_keypoints(frame_rgb, pred_coords, confidence, class_IDs, _unused, scores,
+                      box_thresh=0.5, keypoint_thresh=0.15):
+    """
+    Minimal, TF-free replacement used by the project.
+    - frame_rgb: RGB numpy image (H,W,3) or MXNet NDArray
+    - pred_coords: (N, K, 2) array or MXNet NDArray of keypoint coordinates (x,y)
+    - confidence: (N, K) array/NDArray of keypoint confidences
+    - class_IDs, _unused, scores: passed through from detector (scores can be NDArray)
+    Returns: (annotated_rgb_image, pose_summary_string_or_None)
+    """
+    # Convert MXNet NDArrays to numpy if needed
+    if hasattr(pred_coords, 'asnumpy'):
+        coords = pred_coords.asnumpy()
+    else:
+        coords = np.array(pred_coords) if pred_coords is not None else np.zeros((0,0,2))
+
+    if hasattr(confidence, 'asnumpy'):
+        conf = confidence.asnumpy()
+    else:
+        conf = np.array(confidence) if confidence is not None else np.zeros((coords.shape[0], coords.shape[1] if coords.size else 0))
+
+    if hasattr(scores, 'asnumpy'):
+        scores_np = scores.asnumpy()
+    else:
+        scores_np = np.array(scores) if scores is not None else np.zeros((coords.shape[0],))
+
+    out = frame_rgb.copy() if frame_rgb is not None else None
+    if out is None or coords.size == 0:
+        return frame_rgb, None
+
+    pose_texts = []
+    for i in range(coords.shape[0]):
+        try:
+            sc = float(scores_np[i].max()) if (hasattr(scores_np, 'ndim') and scores_np.ndim > 1) else float(scores_np[i])
+        except Exception:
+            sc = 0.0
+        if sc < box_thresh:
+            continue
+        detected_kps = 0
+        for j in range(coords.shape[1]):
+            x, y = coords[i, j]
+            conf_j = float(conf[i, j]) if conf.size else 0.0
+            if conf_j >= keypoint_thresh:
+                cv2.circle(out, (int(x), int(y)), 3, (0, 255, 0), -1)
+                detected_kps += 1
+        pose_texts.append(f'kp:{detected_kps}')
+
+    pose_summary = pose_texts[0] if len(pose_texts) > 0 else None
+    return out, pose_summary
+
+__all__ = ['cv_plot_keypoints']
+
 
 
 
